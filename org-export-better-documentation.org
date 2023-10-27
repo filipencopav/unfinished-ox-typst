@@ -1,0 +1,264 @@
+#+startup: overview
+
+This one is to test what is described in the [[*Links]] section.
+
+In <<<one>>> line, one would write a hello world program in rust like this: src_rust[:exports code]{pub fn main() -> () { println!("Hello, world!"); }}.
+
+Contains footnote[fn::Some text in a footnote].
+
+* How to read the EBNF syntax specifications?
+The EBNF used here is not ISO EBNF. You can read the rules of the EBNF used in this document, here:
+https://www.w3.org/TR/xml/#sec-notation
+
+I have a few modifications:
+1. Simply ~=~ instead of ~::=~
+2. Comments start with ~;~ and are until the end of line, instead of being between ~/*~ and ~*/~
+
+#+begin_src ebnf
+  ;; Any number or ascii character
+  Alphanumeric = [a-zA-Z0-9]
+
+  ;; any Unicode character, excluding the surrogate blocks (special unicode bytes), FFFE, and FFFF
+  Char = #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+
+  ;; Space, Carriage return, Newline or Tab
+  Whitespace = (#x20 | #x9 | #xD | #xA)+
+#+end_src
+
+* TODO Term specification and explanation
++ Categorize objects by minimal set, standard set
++ Explain what is an object and what is an element
++ Explain how to test
++ Explain how it's rendered and how to test (why you need to define plain-text, paragraph and section first of all
+
+* DONE Universal properties
+Org mode elements and objects all have properties, which can be accessed with ~(org-element-property property-name element)~, where ~property-name~ is a keyword (like ~:this~) and ~element~ is the element's variable.
+
+Here are the properties that each element has:
++ ~:begin~, ~:end~: integer markers of beginning and end of element
++ ~:post-blank~: integer, how many whitespace characters follow this element
+
+All elements/objects whose handler function receives a non-nil ~contents~ argument also have 2 arguments, marking the index of the start and index of the end of ~contents~:
++ ~:contents-begin~, ~:contents-end~: integer markers of beginning and end of element's contents.
+
+* DONE Template
+Template elements, just like plain-text elements, are a special case. Their handler functions take only 2 arguments: the contents (string) and the communication channel plist. Template's handler function is called last, and in it you usually have the opportunity to add the template of the final exported document. Usually a lot of information from the communication channel is used here to decide what to add and what not to add into the resulting file.
+
+Example implementation:
+#+begin_src emacs-lisp
+  (defun org-html6-template (final-contents info)
+    (concat
+     (when (plist-get info :org-html6-insert-xml-header)
+       "〔?xml 「version “1.0” encoding “utf-8”」〕")
+     "〔html6 "
+     (format "〔head 〔title %s〕〔subtitle %s〕〔author 〔name %s〕〕〕"
+             (plist-get info :title)
+             (plist-get info :subtitle)
+             (plist-get info :author))
+     ;; the final contents, the body of our export. they have already been converted into our necessary format by the other functions we will implement
+     final-contents
+     "〕" ;; html6 closing paren
+     ))
+#+end_src
+
+* DONE Plain Text
+Plain text elements, just like template elements, are a special case. In the same way, the callback/handler functions receive only 2 arguments: the plain text itself, and the communication channel plist. This is the main place to escape the contents of the org file. Other places to escape are those, where contents are taken from ~:value~ parameters of elements (see below for such cases, we will use a special made-up function, ~org-html6-escape~, to escape it in those sections.
+
+Example implementation:
+#+begin_src emacs-lisp
+  (defun org-html6-template (plain-text info)
+    (org-html6-escape plain-text))
+#+end_src
+
+* DONE Paragraph
+Paragraph elements are “blocks” of text, that usually contain inline elements. Implementing paragraphs usually means just rendering the ~contents~ attribute. Escaping isn't required here, since ~contents~ is already escaped by either the ~plain-text~ handler or other elements' handlers, i.e. the elements inside of the paragraph, that aren't plain text (like bold, footnote references, entities and so on).
+
+Example paragraphs:
+#+begin_src org
+  This is a paragraph.
+  This is still the same paragraph, a new paragraph begins when there are 2 newlines, like below.
+
+  This is another paragraph *with highlighting*.
+#+end_src
+
+Example implementation of paragraphs:
+#+begin_src emacs-lisp
+  (defun org-html6-paragraph (paragraph contents info)
+    (format "〔p %s〕" contents))
+#+end_src
+
+Full list of ~paragraph~ properties (except universal):
++ ~:post-affiliated~: integer, same as ~:contents-begin~.
+
+* DONE Section
+Section elements contain one or more non-heading elements. With the exception of the text before the first heading in a document (which is considered a section), sections only occur within headings.
+
+Sections are boring and simple to implement, since they are pretty much like paragraphs in this aspect, except they are used to contain multiple paragraphs and other elements (except headings and sections, obviously). Same as with paragraphs, no escaping is necessary here.
+
+Example implementation of headings:
+#+begin_src emacs-lisp
+  (defun org-html6-section (section contents info)
+    (format "〔section %s〕" contents))
+#+end_src
+
+Full list of ~paragraph~ properties (except universal):
++ ~:post-affiliated~: integer, same as ~:begin~[fn::for what purpose?! 😩].
+
+* DONE Bold
+Bold is a simple inline *object*. Its contents is plain text and possibly a few other objects that also boil down to plain text, so it doesn't require any escaping.
+
+For example, one would write bold in org mode =*like this*=.
+
+Example implementation of bold elements:
+#+begin_src emacs-lisp
+  (defun org-html6-bold (bold contents info)
+    (format "〔strong %s〕" contents))
+#+end_src
+
+Full list of ~bold~ properties (except universal): nothing except universal.
+
+* DONE Code
+Code is an inline *object*, an *object* just like bold. It denotes some inline code, without any language. It's written in org mode like =~this~=. The contents of bold isn't considered plain-text (because it's code, so it's not org mode text!), it's not handled by any other handler functions for other objects, and that's why it's not in the ~contents~ argument, but is instead contained in the ~:value~ property. Therefore, ~contents~ (the second argument) of code handler functions is always nil. Code's ~:value~ property isn't escaped!
+
+Example implementation of code inline object:
+#+begin_src emacs-lisp
+  (defun org-html6-code (code contents info)
+  "CONTENTS is always nil."
+    (format "〔pre 〔code %s〕〕"
+            (org-html6-escape
+             (org-element-property :value code))))
+#+end_src
+
+Full list of ~code~ properties (except universal):
++ ~:value~: string, text between the markers, not including the markers.
+
+* DONE Citations
+Example:
+#+begin_src org
+[cite/a/c:See ;@citedwork; for more information]
+#+end_src
+
+A good guide to citation references and citation reference styles can be foune here: https://archive.is/rMF8p#cite-syntax
+
+However I would recommend leaving citation handling up to org-cite (oc.el, oc-basic.el, etc.), because it is a whole rabbit hole by itself, it's too complicated to get into. If you still wish to customize it, get everything else done first.
+
+* TODO Entities
+Entities are special escaped notation for various symbols. Think of HTML's ~&copy;~ or ~&mdash;~, in org mode they are =\copy= and =\mdash= respectively.
+
+A full list of entities you can find with =M-x describe-variable RET org-entities=. We can also =describe-variable= =org-entities-user= and find:
+
+#+begin_verbatim
+User-defined entities used in Org to produce special characters.
+Each entry in this list is a list of strings.  It associates the name
+of the entity that can be inserted into an Org file as \name with the
+appropriate replacements for the different export backends.  The order
+of the fields is the following
+
+name                 As a string, without the leading backslash.
+LaTeX replacement    In ready LaTeX, no further processing will take place.
+LaTeX mathp          Either t or nil.  When t this entity needs to be in
+                     math mode.
+HTML replacement     In ready HTML, no further processing will take place.
+                     Usually this will be an &...; entity.
+ASCII replacement    Plain ASCII, no extensions.
+Latin1 replacement   Use the special characters available in latin1.
+utf-8 replacement    Use the special characters available in utf-8.
+#+end_verbatim
+
+This means, that along the name of the variable as it is used in org mode, there are also different variants of representing this entity in HTML, ASCII, Latin1 and, most importantly, utf-8 (alongside useless latex crap).
+
+So, implementing entity, you would write something like the following:
+#+begin_src emacs-lisp
+  (defun org-mybackend-entity (entity _contents _info)
+    (org-element-property :utf-8 entity))
+#+end_src
+
+~org-element-property~ is a function which can get you any property of the element. For our case with ~entity~, to get the other corresponding properties, we have the keywords ~:latex~, ~:latex-math-p~, ~:html~, ~:latin1~, ~:utf-8~ and ~:ascii~.
+
+Full list of ~entity~ properties (except universal):
++ ~:name~: string containing the name of the used entity (same as name in the documentation above)
++ ~:latex~, ~:latex-math-p~, ~:html~, ~:latin1~, ~:utf-8~, ~:ascii~: strings containing the corresponding value of the character in the encoding or the backend.
++ ~:use-brackets-p~: boolean, whether to use brackets or not (???)
+
+* TODO Export snippets
+Export snippets are elements which say that the user wants to literally hand over a piece of code specific to a back-end. For example, for HTML, you would write: ~@@html:<b>bold text</b>@@~ and the html back-end would literally copy its contents into the resulting export. Both what comes before ~:~ and after it is not subject to org mode syntax.
+
+Example implementation of export snippets:
+#+begin_src emacs-lisp
+  (defun export-snippet (export-snippet contents info)
+    (when (equal "mybackend" (org-element-property :back-end export-snippet))
+      (org-element-property :value export-snippet)))
+#+end_src
+
+Full list of ~export-snippet~ properties (except universal):
++ ~:back-end~: string containing the name of the backend specified by the user
++ ~:value~: string content of the backend export
+
+* TODO Footnote references
+Footnote references are objects that are used to denote that a footnote is referenced here. They can be labeled, meaning they reference a footnote definition, or inline, meaning the user defined the footnote in the reference itself.
+
+Examples:
+#+begin_src org
+  # Standard footnote reference
+  Text not part of footnote ref[fn:1].
+  # Inline footnote references
+  Text not part of footnote ref[fn::Some text in a footnote].
+
+  # Footnote definition
+  [fn:1] This is a footnote definition.
+#+end_src
+
+Because of Org mode rules, a footnote reference can't be on the beginning of a line, because then it's considered a footnote definition instead.
+
+You might find the function ~org-export-get-footnote-definition~ useful for certain back-ends, in which the footnote is defined right where it occurs. The function returns a list with just one element: the footnote definition. If there is no footnote definition, it signals an appropriate error[fn::In my opinion, inline footnotes should be the default footnote format].
+
+Full list of ~footnote-reference~ properties (except universal):
++ ~:label~: string containing the footnote's label
++ ~:type~: symbol, the footnote's type. Only possible value are ~standard~ and ~inline~
+
+* TODO Inline src blocks
+Inline src blocks are objects that users create when they want to add some inline code in a particular language. It's denoted by ~src_LANG[]{}~, where LANG is a language of choice, supported by the export backend, code is placed between the braces ~{}~, and additional parameters (such as whether the user wants the code exported at all) placed between ~[]~.
+
+The backend only has to handle the cases where the user explicitly sets ~:exports code~ in the options square brackets. The backend doesn't have to handle the results of the code if it was executed by org-babel, as far as i know.
+
+Examples:
+#+begin_src org
+  src_rust[:exports code]{obj.map(|x| { x.mod(); x.operation() }).reduce(|l, r| l.concat(r))}
+
+  src_emacs-lisp{(defun func () (message "Hello, world!"))}
+#+end_src
+
+The code of an inline src block is kept in its ~:value~ property and its language is kept in its ~:language~ property. The options in the brackets are strings and are kept in the ~:parameters~ property.
+
+Example implementation:
+#+begin_src emacs-lisp
+  (defun org-html6-inline-src-block (inline-src contents info)
+    "CONTENTS is nil here in any case, by the way."
+    (format "〔pre 〔code 「class “src src-%s”」 %s〕〕"
+            (org-element-property :language inline-src)
+            ;; made-up function, that let's suppose escapes tortoise brackets and such
+            (org-html6-escape (org-element-property :value inline-src))))
+#+end_src
+
+Full list of ~footnote-reference~ properties (except universal):
++ ~:language~: string, the code's language name.
++ ~:value~: string, the code between the braces (~{}~).
++ ~:parameters~: string, parameters contained between the optional brackets (~[]~).
+
+* TODO Italic
+
+* DONE Macro
+Org export macro elements don't require to be and can't be implemented.
+
+* TODO Radio targets
+* TODO Links
+Links are yet another Org object. They can be of four types, indicated by their ~:type~ property, however this property doesn't correspond to the type's name, since the ~regular~ type also has sub-types. So let's go one by one.
+
+** TODO Plain and angle links
+Plain and angle links are pretty similar, the difference is that with ~<https://angle.links>~, org mode is told explicitly that the entire text inside of the angled brackets is one single link. Contrary to that, a plain link may contain a dot at the end of it and org mode will treat the dot as separate from the link, breaking it. However, there should be no difference in handling such links.
+
+** TODO Radio link
+Radio links in the org document are
+
+** TODO Regular link
+Regular links are a little more involved, since besides links and replacement text for links, they may also contain references to headings, sections, and elements in the document. Check [[https://orgmode.org/manual/Internal-Links.html][this Org manual entry out]].

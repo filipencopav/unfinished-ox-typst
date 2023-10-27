@@ -1,0 +1,31 @@
+* Citations
+#+begin_src ebnf
+  Citation = "[cite" citestyle ":" ( globalprefix ";" )? (";" citationreference)+ (globalsuffix)? "]"
+
+  citestyle = ("/" style ("/" variant)?)?
+  style     = ( Alphanumeric | "_" | "-" )+
+  variant   = ( Alphanumeric | "_" | "-" | "/" )+
+
+  globalprefix = globalsuffix
+  globalsuffix = ( Standard-set-object - citationkey - ";" )+
+
+  citationreference  = ( prefix? citationkey suffix? )
+  prefix = Minimalset - citationkey - ";"
+  suffix = Minimalset - ";"
+  citationkey = "@" keyname
+  keyname = (Alphanumeric | [-.:?!`'/*@+|(){}<>&_^$#%~])+ - ";"
+#+end_src
+
+* Entities
+#+begin_src ebnf
+  Entity = '\' name ("{}" | Char - Alphabetic)
+
+  name = ? String that corresponds to the first item in any list of org-entities or org-entities-user ?
+#+end_src
+
+* Export snippets
+#+begin_src ebnf
+  Exportsnippet = "@@" backend ":" contents "@@"
+  backend = (Alphanumeric | "-")
+  contents = (Character+) - "@@"
+#+end_src
