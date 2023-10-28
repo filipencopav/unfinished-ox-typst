@@ -6,30 +6,13 @@ In <<<one>>> line, one would write a hello world program in rust like this: src_
 
 Contains footnote[fn::Some text in a footnote].
 
-* How to read the EBNF syntax specifications?
-The EBNF used here is not ISO EBNF. You can read the rules of the EBNF used in this document, here:
-https://www.w3.org/TR/xml/#sec-notation
-
-I have a few modifications:
-1. Simply ~=~ instead of ~::=~
-2. Comments start with ~;~ and are until the end of line, instead of being between ~/*~ and ~*/~
-
-#+begin_src ebnf
-  ;; Any number or ascii character
-  Alphanumeric = [a-zA-Z0-9]
-
-  ;; any Unicode character, excluding the surrogate blocks (special unicode bytes), FFFE, and FFFF
-  Char = #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
-
-  ;; Space, Carriage return, Newline or Tab
-  Whitespace = (#x20 | #x9 | #xD | #xA)+
-#+end_src
-
 * TODO Term specification and explanation
 + Categorize objects by minimal set, standard set
 + Explain what is an object and what is an element
 + Explain how to test
 + Explain how it's rendered and how to test (why you need to define plain-text, paragraph and section first of all
+
+* TODO What's a handler function?
 
 * DONE Universal properties
 Org mode elements and objects all have properties, which can be accessed with ~(org-element-property property-name element)~, where ~property-name~ is a keyword (like ~:this~) and ~element~ is the element's variable.
@@ -42,7 +25,7 @@ All elements/objects whose handler function receives a non-nil ~contents~ argume
 + ~:contents-begin~, ~:contents-end~: integer markers of beginning and end of element's contents.
 
 * DONE Template
-Template elements, just like plain-text elements, are a special case. Their handler functions take only 2 arguments: the contents (string) and the communication channel plist. Template's handler function is called last, and in it you usually have the opportunity to add the template of the final exported document. Usually a lot of information from the communication channel is used here to decide what to add and what not to add into the resulting file.
+Template elements are a special case. Their handler functions take only 2 arguments: the contents (string) and the communication channel plist. Template's handler function is called last, and in it you usually have the opportunity to add the template of the final exported document. Usually a lot of information from the communication channel is used here to decide what to add and what not to add into the resulting file.
 
 Example implementation:
 #+begin_src emacs-lisp
@@ -147,7 +130,7 @@ Entities are special escaped notation for various symbols. Think of HTML's ~&cop
 
 A full list of entities you can find with =M-x describe-variable RET org-entities=. We can also =describe-variable= =org-entities-user= and find:
 
-#+begin_verbatim
+#+begin_src
 User-defined entities used in Org to produce special characters.
 Each entry in this list is a list of strings.  It associates the name
 of the entity that can be inserted into an Org file as \name with the
@@ -163,7 +146,7 @@ HTML replacement     In ready HTML, no further processing will take place.
 ASCII replacement    Plain ASCII, no extensions.
 Latin1 replacement   Use the special characters available in latin1.
 utf-8 replacement    Use the special characters available in utf-8.
-#+end_verbatim
+#+end_src
 
 This means, that along the name of the variable as it is used in org mode, there are also different variants of representing this entity in HTML, ASCII, Latin1 and, most importantly, utf-8 (alongside useless latex crap).
 

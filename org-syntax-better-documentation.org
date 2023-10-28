@@ -1,3 +1,22 @@
+* How to read the EBNF syntax specifications?
+The EBNF used here is not ISO EBNF. You can read the rules of the EBNF used in this document, here:
+https://www.w3.org/TR/xml/#sec-notation
+
+I have a few modifications:
+1. Simply ~=~ instead of ~::=~
+2. Comments start with ~;~ and are until the end of line, instead of being between ~/*~ and ~*/~
+
+#+begin_src ebnf
+  ;; Any number or ascii character
+  Alphanumeric = [a-zA-Z0-9]
+
+  ;; any Unicode character, excluding the surrogate blocks (special unicode bytes), FFFE, and FFFF
+  Char = #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+
+  ;; Space, Carriage return, Newline or Tab
+  Whitespace = (#x20 | #x9 | #xD | #xA)+
+#+end_src
+
 * Citations
 #+begin_src ebnf
   Citation = "[cite" citestyle ":" ( globalprefix ";" )? (";" citationreference)+ (globalsuffix)? "]"
