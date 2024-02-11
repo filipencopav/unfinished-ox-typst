@@ -6,6 +6,10 @@ In <<<one>>> line, one would write a hello world program in rust like this: src_
 
 Contains footnote[fn::Some text in a footnote].
 
+Testing /*bold italics*/.
+
+*bold in </b> html*;
+
 * TODO Term specification and explanation
 + Categorize objects by minimal set, standard set
 + Explain what is an object and what is an element
@@ -160,7 +164,8 @@ So, implementing entity, you would write something like the following:
 
 Full list of ~entity~ properties (except universal):
 + ~:name~: string containing the name of the used entity (same as name in the documentation above)
-+ ~:latex~, ~:latex-math-p~, ~:html~, ~:latin1~, ~:utf-8~, ~:ascii~: strings containing the corresponding value of the character in the encoding or the backend.
++ ~:latex~, ~:html~, ~:latin1~, ~:utf-8~, ~:ascii~: strings containing the corresponding value of the character in the encoding or the backend.
++ ~:latex-math-p~: boolean, whether this entity needs to be in “math mode” (???)
 + ~:use-brackets-p~: boolean, whether to use brackets or not (???)
 
 * TODO Export snippets

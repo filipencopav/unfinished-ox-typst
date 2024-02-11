@@ -10,75 +10,130 @@
         (string char)))
     string)))
 
+(defun org-typst--reference (datum info &optional named-only)
+  "Return an appropriate reference for DATUM.
+
+DATUM is an element or a `target' type object.  INFO is the
+current export state, as a plist.
+
+When NAMED-ONLY is non-nil and DATUM has no NAME keyword, return
+nil.  This doesn't apply to headlines, inline tasks, radio
+targets and targets.
+
+Taken from ox-html.el, copied here since it's an internal, just
+in case it gets deleted"
+  (let* ((type (org-element-type datum))
+         (user-label
+          (org-element-property
+           (pcase type
+             ((or `headline `inlinetask) :CUSTOM_ID)
+             ((or `radio-target `target) :value)
+             (_ :name))
+           datum)))
+    (cond
+     ((and user-label
+           (or (plist-get info :html-prefer-user-labels)
+               ;; Used CUSTOM_ID property unconditionally.
+               (memq type '(headline inlinetask))))
+      user-label)
+     ((and named-only
+           (not (memq type '(headline inlinetask radio-target target)))
+           (not user-label))
+      nil)
+     (t
+      (org-export-get-reference datum info)))))
+
+(defun org-typst-radio-target (radio-target contents info)
+  (format "#label(\"%s\");%s" (org-typst--reference radio-target info) contents))
+
 (defun org-typst-link (link contents info)
+  ;; https://typst.app//docs/reference/model/link
+  ;; > To link to web pages, dest should be a valid URL string. If the URL is in the mailto: or tel: scheme and the body parameter is omitted, the email address or phone number will be the link's body, without the scheme.
+  ;; For ex. `#link("mailto:thisperson@gmail.com")' will produce `thisperson@gmail.com' (clickable link)
+  ;; Therefore mailto: links can map 1:1 with org mode mailto: links' behavior/look
   (pcase (intern (org-element-property :type link))
     ('radio
      (let ((destination (org-export-resolve-radio-link link info)))
-	     (if (not destination) (org-string-nw-p contents)
-	       (format "#link(label(\"%s\"), %s);"
-		             (org-export-get-reference destination info)
-		             contents))))
-    (_
+       (if destination
+	   (format "#link(label(\"%s\"), \"%s\");"
+		   (org-typst--reference destination info)
+		   contents)
+         (org-string-nw-p contents))))
+    ('mailto
+     '(TODO: treat as mailto link))
+    ((or 'http 'https 'ftp 'mailto 'news)
      (concat
       "#link(\""
       (org-element-property :raw-link link)
       "\")["
       contents
-      "];"))))
+      "];"))
+    (_
+     ())))
+
+(defun org-typst-template (ready-file-contents export-options)
+  ready-file-contents)
+
+;; TODO: Escape the characters: "();[]#*`_<>@$\\/**///"
+(defun org-typst-plain-text (plain-text info)
+  plain-text)
+
+(defun org-typst-section (section contents info)
+  contents)
+
+(defun org-typst-paragraph (paragraph contents info)
+  contents)
+
+(defun org-typst-bold (bold contents info)
+  (format "#strong[%s];" contents))
+
+(defun org-typst-code (code contents info)
+  (format "#raw[%s];" contents))
+
+(defun org-typst-entity (entity contents info)
+  (org-element-property :utf-8 entity))
+
+(defun org-typst-export-snippet (export-snippet contents info)
+  (when (equal "typst" (org-element-property :back-end export-snippet))
+    (org-element-property :value export-snippet)))
+
+(defun org-typst-footnote-reference (footnote-reference contents info)
+  (format " #footnote[%s];"
+          (car (org-export-get-footnote-definition footnote-reference info))))
+
+(defun org-typst-inline-src-block (inline-src-block contents info)
+  (format "#raw(\"%s\", block: false, lang: \"%s\");"
+          (org-typst--escape-double-quote-in-string
+           (org-element-property :value inline-src-block))
+          (let ((org-lang (org-element-property :language inline-src-block)))
+            (or (alist-get (intern org-lang) (plist-get info :typst-langs))
+                (downcase org-lang)))))
+
+(defun org-typst-italic (italic contents info)
+  (format "#emph[%s];" contents))
+
+(defun org-typst-line-break (line-break contents info)
+  (format "" contents))
+
+(defun org-typst-macro (macro contents info)
+  (format "fml"))
 
 (org-export-define-backend 'typst
-  '((template
-     . (lambda (ready-file-contents export-options)
-         ready-file-contents))
-    (plain-text
-     . (lambda (plain-text info)
-         plain-text))
-    (section
-     . (lambda (section contents info)
-         contents))
-    (paragraph
-     . (lambda (paragraph contents info)
-         contents))
-    (bold
-     . (lambda (bold contents info)
-         (format "#strong[%s];" contents)))
-    (code
-     . (lambda (code contents info)
-         (format "#raw[%s];" contents)))
-    (entity
-     . (lambda (entity contents info)
-         (org-element-property :utf-8 entity)))
-    (export-snippet
-     . (lambda (export-snippet contents info)
-         (when (equal "typst" (org-element-property :back-end export-snippet))
-           (org-element-property :value export-snippet))))
-    (footnote-reference
-     . (lambda (footnote-reference contents info)
-         (format " #footnote[%s];"
-                 (car (org-export-get-footnote-definition footnote-reference info)))))
-    (inline-src-block
-     . (lambda (inline-src-block contents info)
-         (format "#raw(\"%s\", block: false, lang: \"%s\");"
-                 (org-typst--escape-double-quote-in-string
-                  (org-element-property :value inline-src-block))
-                 (let ((org-lang (org-element-property :language inline-src-block)))
-                   ;; Maybe find an appropriate name in the :typst-langs plist
-                   (or (alist-get (intern org-lang) (plist-get info :typst-langs))
-			                 (downcase org-lang))))))
-    (italic
-     . (lambda (italic contents info)
-         (format "#emph[%s];" contents)))
-    (line-break
-     . (lambda (line-break contents info)
-         (format "\ " contents)))
-    (link . org-typst-link)
-    (macro
-     . (lambda (macro contents info)
-         (format "fml")))
-    (radio-target
-     . (lambda (radio-target contents info)
-         (format "%s" contents)))
-    )
+  '((template . org-typst-template)
+    (plain-text . org-typst-plain-text)
+    (section . org-typst-section)
+    (paragraph . org-typst-paragraph)
+    (bold . org-typst-bold)
+    (code . org-typst-code)
+    (entity . org-typst-entity)
+    (export-snippet . org-typst-export-snippet)
+    (footnote-reference . org-typst-footnote-reference)
+    (inline-src-block . org-typst-inline-src-block)
+    (italic . org-typst-italic)
+    (line-break . org-typst-line-break)
+    (macro . org-typst-macro)
+    (radio-target . org-typst-radio-target)
+    (link . org-typst-link))
   :options-alist
   '((:typst-langs "TYPST_LANGS" parse '((emacs-lisp . "elisp"))))
   )
