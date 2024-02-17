@@ -1,14 +1,26 @@
-;; org-export-define-backend
+;;;; UTIL VARS
+(defconst org-typst--special-characters
+  "();[]#*`_<>@$\\/"
+  "User-written characters in the org mode document that need to be escaped to not interfere with typst syntax.
+
+For `/' and `*' we need additional checks to see if it's a comment or not.")
+
+;;;; UTIL FUNCTIONS
+(defun org-typst--escape-content-string (string)
+  (mapconcat
+   (lambda (char)
+     (if (seq-contains-p org-typst--special-characters char)
+         (format "\\%c" char)
+       (format "%c" char)))
+   string))
 
 (defun org-typst--escape-double-quote-in-string (string)
-  (apply
-   'concat
-   (seq-map
-    (lambda (char)
-      (if (memq char '(?\" ?\\))
-          (format "\\%c" char)
-        (string char)))
-    string)))
+  (mapconcat
+   (lambda (char)
+     (if (memq char '(?\" ?\\))
+         (format "\\%c" char)
+       (string char)))
+   string))
 
 (defun org-typst--reference (datum info &optional named-only)
   "Return an appropriate reference for DATUM.
@@ -43,6 +55,8 @@ in case it gets deleted"
      (t
       (org-export-get-reference datum info)))))
 
+
+;;;; BACKEND FUNCTIONS
 (defun org-typst-radio-target (radio-target contents info)
   (format "#label(\"%s\");%s" (org-typst--reference radio-target info) contents))
 
@@ -76,7 +90,7 @@ in case it gets deleted"
 
 ;; TODO: Escape the characters: "();[]#*`_<>@$\\/**///"
 (defun org-typst-plain-text (plain-text info)
-  plain-text)
+  (org-typst--escape-content-string plain-text))
 
 (defun org-typst-section (section contents info)
   contents)
@@ -118,6 +132,7 @@ in case it gets deleted"
 (defun org-typst-macro (macro contents info)
   (format "fml"))
 
+;; org-export-define-backend
 (org-export-define-backend 'typst
   '((template . org-typst-template)
     (plain-text . org-typst-plain-text)
@@ -138,9 +153,19 @@ in case it gets deleted"
   '((:typst-langs "TYPST_LANGS" parse '((emacs-lisp . "elisp"))))
   )
 
-(defun org-typst-export-as-typst-buffer ()
+;; Devel util functions
+(defun org-typst--export-buffer ()
   (interactive)
   (org-export-to-buffer 'typst "*Org Typst Export*"))
+
+(defun org-typst--export-file ()
+  (interactive)
+  (let* ((bufname (buffer-name (current-buffer)))
+         (extension-start (string-match "\\.org$" bufname 0 t))
+         (filename-no-ext (when extension-start (substring bufname 0 extension-start))))
+    (when (and filename-no-ext (> (length filename-no-ext) 0))
+      (let ((new-filename (concat filename-no-ext ".typ")))
+        (org-export-to-file 'typst new-filename)))))
 
 (defvar objects
   '(bold code entity export-snippet footnote-reference inline-babel-call inline-src-block italic line-break latex-fragment link macro radio-target statistics-cookie strike-through subscript superscript table-cell target timestamp underline verbatim))
