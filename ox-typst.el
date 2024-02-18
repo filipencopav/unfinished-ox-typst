@@ -11,7 +11,7 @@ For `/' and `*' we need additional checks to see if it's a comment or not.")
    (lambda (char)
      (if (seq-contains-p org-typst--special-characters char)
          (format "\\%c" char)
-       (format "%c" char)))
+       (string char)))
    string))
 
 (defun org-typst--escape-double-quote-in-string (string)
@@ -65,25 +65,25 @@ in case it gets deleted"
   ;; > To link to web pages, dest should be a valid URL string. If the URL is in the mailto: or tel: scheme and the body parameter is omitted, the email address or phone number will be the link's body, without the scheme.
   ;; For ex. `#link("mailto:thisperson@gmail.com")' will produce `thisperson@gmail.com' (clickable link)
   ;; Therefore mailto: links can map 1:1 with org mode mailto: links' behavior/look
-  (pcase (intern (org-element-property :type link))
-    ('radio
-     (let ((destination (org-export-resolve-radio-link link info)))
-       (if destination
-	   (format "#link(label(\"%s\"), \"%s\");"
-		   (org-typst--reference destination info)
-		   contents)
-         (org-string-nw-p contents))))
-    ('mailto
-     '(TODO: treat as mailto link))
-    ((or 'http 'https 'ftp 'mailto 'news)
-     (concat
-      "#link(\""
-      (org-element-property :raw-link link)
-      "\")["
-      contents
-      "];"))
-    (_
-     ())))
+  (let ((contents (org-string-nw-p contents))
+        (type (org-element-property :type link)))
+    (pcase (intern type)
+      ('radio
+       (let ((destination (org-export-resolve-radio-link link info)))
+         (if destination
+	     (format "#link(label(\"%s\"), \"%s\");"
+		     (org-typst--reference destination info)
+		     contents)
+           (org-string-nw-p contents))))
+      ((or 'mailto 'http 'https 'ftp 'news)
+       (format "#link(\"%s\", [%s])"
+               (url-encode-url (concat type ":" (org-element-property :link link)))
+               (or contents
+                   (->> link (org-element-property :link) org-typst--escape-content-string))))
+      (_
+       ;; TODO: support other link types (fuzzy for ex.)
+       (warn "Unsupported link type `%s'" type)
+       nil))))
 
 (defun org-typst-template (ready-file-contents export-options)
   ready-file-contents)
@@ -102,7 +102,10 @@ in case it gets deleted"
   (format "#strong[%s];" contents))
 
 (defun org-typst-code (code contents info)
-  (format "#raw[%s];" contents))
+  (format "#raw(\"%s\");"
+          (->> code
+               (org-element-property :value)
+               org-typst--escape-double-quote-in-string)))
 
 (defun org-typst-entity (entity contents info)
   (org-element-property :utf-8 entity))
@@ -127,10 +130,17 @@ in case it gets deleted"
   (format "#emph[%s];" contents))
 
 (defun org-typst-line-break (line-break contents info)
-  (format "" contents))
+  (format "\\\n" contents))
 
-(defun org-typst-macro (macro contents info)
-  (format "fml"))
+(defun org-typst-headline (headline contents info)
+  ;; TODO: Implement all the optional arguments listed in the typst docs
+  ;; https://typst.app/docs/reference/model/heading/
+  (let ((level (org-element-property :level headline))
+        (raw-value (org-element-property :raw-value headline)))
+    (format "#heading(level: %d, \"%s\");\n%s"
+            level
+            raw-value
+            contents)))
 
 ;; org-export-define-backend
 (org-export-define-backend 'typst
@@ -146,9 +156,9 @@ in case it gets deleted"
     (inline-src-block . org-typst-inline-src-block)
     (italic . org-typst-italic)
     (line-break . org-typst-line-break)
-    (macro . org-typst-macro)
     (radio-target . org-typst-radio-target)
-    (link . org-typst-link))
+    (link . org-typst-link)
+    (headline . org-typst-headline))
   :options-alist
   '((:typst-langs "TYPST_LANGS" parse '((emacs-lisp . "elisp"))))
   )
