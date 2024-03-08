@@ -1,6 +1,6 @@
 #+startup: overview
 
-This one is to test what is described in the [[*Links]] section.
+This one is to test what is described in the [[Links][links section]].
 
 In <<<one>>> line, one would write a hello world program in rust like this: src_rust[:exports code]{pub fn main() -> () { println!("Hello, world!"); }}.
 

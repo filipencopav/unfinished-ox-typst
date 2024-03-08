@@ -7,6 +7,7 @@ For `/' and `*' we need additional checks to see if it's a comment or not.")
 
 ;;;; UTIL FUNCTIONS
 (defun org-typst--escape-content-string (string)
+  "Escapes a content string. If, for example, there is a `]' character in the string, then it is escaped so that it doesn't act as a closing delimeter for a content block opened by ox-typst."
   (mapconcat
    (lambda (char)
      (if (seq-contains-p org-typst--special-characters char)
@@ -32,8 +33,8 @@ When NAMED-ONLY is non-nil and DATUM has no NAME keyword, return
 nil.  This doesn't apply to headlines, inline tasks, radio
 targets and targets.
 
-Taken from ox-html.el, copied here since it's an internal, just
-in case it gets deleted"
+Taken from ox-html.el, copied into ox-typst.el since it's an ox-html
+internal, just in case it gets deleted"
   (let* ((type (org-element-type datum))
          (user-label
           (org-element-property
@@ -66,7 +67,8 @@ in case it gets deleted"
   ;; For ex. `#link("mailto:thisperson@gmail.com")' will produce `thisperson@gmail.com' (clickable link)
   ;; Therefore mailto: links can map 1:1 with org mode mailto: links' behavior/look
   (let ((contents (org-string-nw-p contents))
-        (type (org-element-property :type link)))
+        (type (org-element-property :type link))
+        (path (org-element-property :path link)))
     (pcase (intern type)
       ('radio
        (let ((destination (org-export-resolve-radio-link link info)))
@@ -77,18 +79,29 @@ in case it gets deleted"
            (org-string-nw-p contents))))
       ((or 'mailto 'http 'https 'ftp 'news)
        (format "#link(\"%s\", [%s])"
-               (url-encode-url (concat type ":" (org-element-property :link link)))
+               (url-encode-url (concat type ":" (org-element-property :raw-link link)))
                (or contents
-                   (->> link (org-element-property :link) org-typst--escape-content-string))))
+                   (->> link
+                        (org-element-property :raw-link)
+                        org-typst--escape-content-string))))
+      ('fuzzy
+       (let ((ref (-> (org-export-resolve-fuzzy-link link info)
+                      (org-typst--reference info))))
+         (format "#link(label(\"%s\"), \"%s\")"
+                 ref
+                 (or contents
+                     (org-element-property :path link)))))
       (_
-       ;; TODO: support other link types (fuzzy for ex.)
+       ;; TODO: support other link types
        (warn "Unsupported link type `%s'" type)
        nil))))
 
 (defun org-typst-template (ready-file-contents export-options)
-  ready-file-contents)
+  ;; TODO: Source template configs from `export-options'
+  (concat
+   "#set heading(numbering: \"1. \");\n"
+   ready-file-contents))
 
-;; TODO: Escape the characters: "();[]#*`_<>@$\\/**///"
 (defun org-typst-plain-text (plain-text info)
   (org-typst--escape-content-string plain-text))
 
@@ -115,7 +128,7 @@ in case it gets deleted"
     (org-element-property :value export-snippet)))
 
 (defun org-typst-footnote-reference (footnote-reference contents info)
-  (format " #footnote[%s];"
+  (format "#footnote[%s];"
           (car (org-export-get-footnote-definition footnote-reference info))))
 
 (defun org-typst-inline-src-block (inline-src-block contents info)
@@ -137,9 +150,10 @@ in case it gets deleted"
   ;; https://typst.app/docs/reference/model/heading/
   (let ((level (org-element-property :level headline))
         (raw-value (org-element-property :raw-value headline)))
-    (format "#heading(level: %d, \"%s\");\n%s"
+    (format "#heading(level: %d, \"%s\");#label(\"%s\");\n%s"
             level
             raw-value
+            (org-export-get-reference headline info)
             contents)))
 
 ;; org-export-define-backend
@@ -158,7 +172,45 @@ in case it gets deleted"
     (line-break . org-typst-line-break)
     (radio-target . org-typst-radio-target)
     (link . org-typst-link)
-    (headline . org-typst-headline))
+    (headline . org-typst-headline)
+
+    ;; (center-block . org-latex-center-block)
+    ;; (clock . org-latex-clock)
+    ;; (drawer . org-latex-drawer)
+    ;; (dynamic-block . org-latex-dynamic-block)
+    ;; (example-block . org-latex-example-block)
+    ;; (export-block . org-latex-export-block)
+    ;; (fixed-width . org-latex-fixed-width)
+    ;; (footnote-definition . org-latex-footnote-definition)
+    ;; (horizontal-rule . org-latex-horizontal-rule)
+    ;; (inlinetask . org-latex-inlinetask)
+    ;; (item . org-latex-item)
+    ;; (keyword . org-latex-keyword)
+    ;; (latex-environment . org-latex-latex-environment)
+    ;; (latex-fragment . org-latex-latex-fragment)
+    ;; (node-property . org-latex-node-property)
+    ;; (plain-list . org-latex-plain-list)
+    ;; (planning . org-latex-planning)
+    ;; (property-drawer . org-latex-property-drawer)
+    ;; (quote-block . org-latex-quote-block)
+    ;; (special-block . org-latex-special-block)
+    ;; (src-block . org-latex-src-block)
+    ;; (statistics-cookie . org-latex-statistics-cookie)
+    ;; (strike-through . org-latex-strike-through)
+    ;; (subscript . org-latex-subscript)
+    ;; (superscript . org-latex-superscript)
+    ;; (table . org-latex-table)
+    ;; (table-cell . org-latex-table-cell)
+    ;; (table-row . org-latex-table-row)
+    ;; (target . org-latex-target)
+    ;; (timestamp . org-latex-timestamp)
+    ;; (underline . org-latex-underline)
+    ;; (verbatim . org-latex-verbatim)
+    ;; (verse-block . org-latex-verse-block)
+    ;; ;; Pseudo objects and elements.
+    ;; (latex-math-block . org-latex-math-block)
+    ;; (latex-matrices . org-latex-matrices)
+    )
   :options-alist
   '((:typst-langs "TYPST_LANGS" parse '((emacs-lisp . "elisp"))))
   )
