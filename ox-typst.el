@@ -15,7 +15,7 @@ For `/' and `*' we need additional checks to see if it's a comment or not.")
        (string char)))
    string))
 
-(defun org-typst--escape-double-quote-in-string (string)
+(defun org-typst--escape-raw-string (string)
   (mapconcat
    (lambda (char)
      (if (memq char '(?\" ?\\))
@@ -118,7 +118,7 @@ internal, just in case it gets deleted"
   (format "#raw(\"%s\");"
           (->> code
                (org-element-property :value)
-               org-typst--escape-double-quote-in-string)))
+               org-typst--escape-raw-string)))
 
 (defun org-typst-entity (entity contents info)
   (org-element-property :utf-8 entity))
@@ -128,12 +128,24 @@ internal, just in case it gets deleted"
     (org-element-property :value export-snippet)))
 
 (defun org-typst-footnote-reference (footnote-reference contents info)
-  (format "#footnote[%s];"
-          (car (org-export-get-footnote-definition footnote-reference info))))
+  (let* ((definition (org-export-get-footnote-definition footnote-reference info))
+         (definition-ref (org-typst--reference definition info)))
+    (cond
+     ((eq 'inline (org-element-property :type footnote-reference))
+      ;; if it's inline then the CAR of the definition will be a string
+      (format "#footnote[%s];" (car definition)))
+
+     ((org-export-footnote-first-reference-p footnote-reference info)
+      (format "#footnote[%s];#label(\"%s\");"
+              (org-export-data definition info)
+              definition-ref))
+
+     (t
+      (format "#footnote(label(\"%s\"))" definition-ref)))))
 
 (defun org-typst-inline-src-block (inline-src-block contents info)
   (format "#raw(\"%s\", block: false, lang: \"%s\");"
-          (org-typst--escape-double-quote-in-string
+          (org-typst--escape-raw-string
            (org-element-property :value inline-src-block))
           (let ((org-lang (org-element-property :language inline-src-block)))
             (or (alist-get (intern org-lang) (plist-get info :typst-langs))
@@ -154,7 +166,7 @@ internal, just in case it gets deleted"
             level
             raw-value
             (org-export-get-reference headline info)
-            contents)))
+            (or contents ""))))
 
 ;; org-export-define-backend
 (org-export-define-backend 'typst
