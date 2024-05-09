@@ -4,9 +4,11 @@ This one is to test what is described in the [[Links][links section]].
 
 In <<<one>>> line, one would write a hello world program in rust like this: src_rust[:exports code]{pub fn main() -> () { println!("Hello, world!"); }}.
 
-Contains footnote[fn::Some text in a footnote].
+Contains footnote[fn:1].
 
 Testing /*bold italics*/.
+
+Footnote reference[fn:1].
 
 *bold in </b> html*;
 
@@ -152,7 +154,7 @@ Latin1 replacement   Use the special characters available in latin1.
 utf-8 replacement    Use the special characters available in utf-8.
 #+end_src
 
-This means, that along the name of the variable as it is used in org mode, there are also different variants of representing this entity in HTML, ASCII, Latin1 and, most importantly, utf-8 (alongside useless latex crap).
+This means that, along the name of the variable as it is used in org mode, there are also different variants of representing this entity in HTML, ASCII, Latin1 and, most importantly, utf-8 (alongside useless latex crap).
 
 So, implementing entity, you would write something like the following:
 #+begin_src emacs-lisp
@@ -250,3 +252,7 @@ Radio links in the org document are
 
 ** TODO Regular link
 Regular links are a little more involved, since besides links and replacement text for links, they may also contain references to headings, sections, and elements in the document. Check [[https://orgmode.org/manual/Internal-Links.html][this Org manual entry out]].
+
+* Footnotes
+
+[fn:1] Some text in a footnote

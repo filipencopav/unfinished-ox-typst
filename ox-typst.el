@@ -168,6 +168,17 @@ internal, just in case it gets deleted"
             (org-export-get-reference headline info)
             (or contents ""))))
 
+(defun org-typst-src-block (src-block contents info)
+  ;; contents is always nil, ignorable
+  (let ((lang (org-element-property :language src-block))
+        (code (org-typst--escape-raw-string (org-element-property :value src-block))))
+    (format "#raw(\"%s\", lang: \"%s\", block: true);" code lang)))
+
+(defun org-typst-plain-list (plain-list contents info)
+  ;;TODO implement
+  ;; possible :type property values: 'unordered, 'ordered, 'descriptive.
+  )
+
 ;; org-export-define-backend
 (org-export-define-backend 'typst
   '((template . org-typst-template)
@@ -185,6 +196,8 @@ internal, just in case it gets deleted"
     (radio-target . org-typst-radio-target)
     (link . org-typst-link)
     (headline . org-typst-headline)
+    (src-block . org-typst-src-block)
+    (plain-list . org-typst-plain-list)
 
     ;; (center-block . org-latex-center-block)
     ;; (clock . org-latex-clock)
