@@ -10,7 +10,24 @@ Testing /*bold italics*/.
 
 Footnote reference[fn:1].
 
-*bold in </b> html*;
++ descriptive item :: some definition
++ another item :: another definition
+
+
+1. Some numbered item
+2. two
+3. three
+4. [@10] ten
+
+
++ simple list
++ however
++ a term :: is mixed inside of it
++ so how will this work?
+
+#+BEGIN_CENTER
+centered text!
+#+END_CENTER
 
 * TODO Term specification and explanation
 + Categorize objects by minimal set, standard set

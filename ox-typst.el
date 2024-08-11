@@ -174,10 +174,44 @@ internal, just in case it gets deleted"
         (code (org-typst--escape-raw-string (org-element-property :value src-block))))
     (format "#raw(\"%s\", lang: \"%s\", block: true);" code lang)))
 
+(defun org-typst--list-func-name (type)
+  (pcase type
+    ('unordered "list")
+    ('ordered "enum")
+    ('descriptive "terms")))
+
 (defun org-typst-plain-list (plain-list contents info)
-  ;;TODO implement
+  ;; DONE implement
   ;; possible :type property values: 'unordered, 'ordered, 'descriptive.
-  )
+  contents)
+
+(defun org-typst-item (item contents info)
+  (let* ((type (->> (org-export-get-parent item)
+                    (org-element-property :type)))
+         (counter (org-element-property :counter item))   ;; nil if no custom counter
+         (checkbox (org-element-property :checkbox item)) ;; 'off, 'on, 'trans or nil
+         (tag                                             ;; string or nil
+          (when-let ((tag (org-element-property :tag item)))
+            (org-export-data tag info))))
+    ;; #\(enum|list|terms\).item\((counter)\)?([tag], [text])
+    (pcase type
+      ('ordered
+       (concat "#enum.item"
+               (and counter (format "(%s)" counter))
+               (format "[%s];" contents)))
+      ('unordered
+       ;; NOTE: possibly provide interface for custom formatting of terms in unordered lists
+       (format "#list.item[#strong[%s];%s];" (or (and tag (concat tag " ")) "") contents))
+      ('descriptive
+       (format "#terms.item([%s], [%s]);" (or tag "(no term)") contents)))))
+
+(defun org-latex-center-block (_ contents _)
+  (format "#align(center, [%s]);" contents))
+
+(defun org-latex-clock (clock _ _)
+  (format "CLOCK: %s, %s"
+          (org-timestamp-translate (org-element-property :value clock))
+          (org-element-property :duration clock)))
 
 ;; org-export-define-backend
 (org-export-define-backend 'typst
@@ -198,9 +232,10 @@ internal, just in case it gets deleted"
     (headline . org-typst-headline)
     (src-block . org-typst-src-block)
     (plain-list . org-typst-plain-list)
+    (item . org-typst-item)
+    (center-block . org-latex-center-block)
+    (clock . org-latex-clock)
 
-    ;; (center-block . org-latex-center-block)
-    ;; (clock . org-latex-clock)
     ;; (drawer . org-latex-drawer)
     ;; (dynamic-block . org-latex-dynamic-block)
     ;; (example-block . org-latex-example-block)
@@ -209,7 +244,6 @@ internal, just in case it gets deleted"
     ;; (footnote-definition . org-latex-footnote-definition)
     ;; (horizontal-rule . org-latex-horizontal-rule)
     ;; (inlinetask . org-latex-inlinetask)
-    ;; (item . org-latex-item)
     ;; (keyword . org-latex-keyword)
     ;; (latex-environment . org-latex-latex-environment)
     ;; (latex-fragment . org-latex-latex-fragment)
