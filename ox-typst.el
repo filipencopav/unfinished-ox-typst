@@ -205,13 +205,30 @@ internal, just in case it gets deleted"
       ('descriptive
        (format "#terms.item([%s], [%s]);" (or tag "(no term)") contents)))))
 
-(defun org-latex-center-block (_ contents _)
+(defun org-typst-center-block (_ contents _)
   (format "#align(center, [%s]);" contents))
 
-(defun org-latex-clock (clock _ _)
+(defun org-typst-clock (clock _ _)
   (format "CLOCK: %s, %s"
           (org-timestamp-translate (org-element-property :value clock))
           (org-element-property :duration clock)))
+
+(defun org-typst-drawer (drawer contents info)
+  (funcall (plist-get info :typst-drawer-formatter)
+           (org-element-property :drawer-name drawer)
+           contents))
+
+(defcustom org-typst-langs
+  '((emacs-lisp . "elisp"))
+  "Mapping from emacs language names to typst language names.
+
+When org mode encounters code blocks, it extracts their languages according to its own rules and conventions. This might result in, for example, the language of an ELisp block being extracted as `emacs-lisp'. At the same time, ELisp is called `elisp' in typst. Thus, we need to tell org typst export how to translate between the org mode names of languages and typst names of languages."
+  :type '(list (alist :key-type symbol :value-type string)))
+
+(defcustom org-typst-drawer-formatter
+  (lambda (name contents) contents)
+  "Function which formats an org drawer in typst. It takes the drawer's name as the first argument and the drawer's contents as the second argument. Both are strings. Should return string. By default returns the contents."
+  :type 'function)
 
 ;; org-export-define-backend
 (org-export-define-backend 'typst
@@ -233,45 +250,45 @@ internal, just in case it gets deleted"
     (src-block . org-typst-src-block)
     (plain-list . org-typst-plain-list)
     (item . org-typst-item)
-    (center-block . org-latex-center-block)
-    (clock . org-latex-clock)
+    (center-block . org-typst-center-block)
+    (clock . org-typst-clock)
+    (drawer . org-typst-drawer)
 
-    ;; (drawer . org-latex-drawer)
-    ;; (dynamic-block . org-latex-dynamic-block)
-    ;; (example-block . org-latex-example-block)
-    ;; (export-block . org-latex-export-block)
-    ;; (fixed-width . org-latex-fixed-width)
-    ;; (footnote-definition . org-latex-footnote-definition)
-    ;; (horizontal-rule . org-latex-horizontal-rule)
-    ;; (inlinetask . org-latex-inlinetask)
-    ;; (keyword . org-latex-keyword)
-    ;; (latex-environment . org-latex-latex-environment)
-    ;; (latex-fragment . org-latex-latex-fragment)
-    ;; (node-property . org-latex-node-property)
-    ;; (plain-list . org-latex-plain-list)
-    ;; (planning . org-latex-planning)
-    ;; (property-drawer . org-latex-property-drawer)
-    ;; (quote-block . org-latex-quote-block)
-    ;; (special-block . org-latex-special-block)
-    ;; (src-block . org-latex-src-block)
-    ;; (statistics-cookie . org-latex-statistics-cookie)
     ;; (strike-through . org-latex-strike-through)
     ;; (subscript . org-latex-subscript)
     ;; (superscript . org-latex-superscript)
+    ;; (keyword . org-latex-keyword)
+    ;; (underline . org-latex-underline)
+    ;; (footnote-definition . org-latex-footnote-definition)
+    ;; (horizontal-rule . org-latex-horizontal-rule)
+    ;; (fixed-width . org-latex-fixed-width)
+    ;; (property-drawer . org-latex-property-drawer)
+    ;; (quote-block . org-latex-quote-block)
     ;; (table . org-latex-table)
     ;; (table-cell . org-latex-table-cell)
     ;; (table-row . org-latex-table-row)
-    ;; (target . org-latex-target)
-    ;; (timestamp . org-latex-timestamp)
-    ;; (underline . org-latex-underline)
     ;; (verbatim . org-latex-verbatim)
     ;; (verse-block . org-latex-verse-block)
+
+    ;; (dynamic-block . org-latex-dynamic-block)
+    ;; (example-block . org-latex-example-block)
+    ;; (export-block . org-latex-export-block)
+    ;; (inlinetask . org-latex-inlinetask)
+    ;; (latex-environment . org-latex-latex-environment)
+    ;; (latex-fragment . org-latex-latex-fragment)
+    ;; (node-property . org-latex-node-property)
+    ;; (planning . org-latex-planning)
+    ;; (special-block . org-latex-special-block)
+    ;; (statistics-cookie . org-latex-statistics-cookie)
+    ;; (target . org-latex-target)
+    ;; (timestamp . org-latex-timestamp)
     ;; ;; Pseudo objects and elements.
     ;; (latex-math-block . org-latex-math-block)
     ;; (latex-matrices . org-latex-matrices)
     )
   :options-alist
-  '((:typst-langs "TYPST_LANGS" parse '((emacs-lisp . "elisp"))))
+  '((:typst-langs nil nil org-typst-langs)
+    (:typst-drawer-formatter "TYPST_DRAWER_FORMATTER" nil org-typst-drawer-formatter))
   )
 
 ;; Devel util functions
