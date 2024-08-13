@@ -1,6 +1,8 @@
 #+startup: overview
 
 This one is to test what is described in the [[Links][links section]].
+: this is fixed-width stuff
+This software is of alpha quality.
 
 In <<<one>>> line, one would write a hello world program in rust like this: src_rust[:exports code]{pub fn main() -> () { println!("Hello, world!"); }}.
 
@@ -28,6 +30,11 @@ Footnote reference[fn:1].
 #+BEGIN_CENTER
 centered text!
 #+END_CENTER
+
+#+ATTR_TYPST: :author Karl Marx
+#+begin_quote
+Ideas, which conquer our intelligence, which overcome the outlook that reason has riveted to our conscience, are chains from which we cannot tear ourselves away without tearing our hearts; they are demons that man can overcome only by submitting to them.
+#+end_quote
 
 * TODO Term specification and explanation
 + Categorize objects by minimal set, standard set

@@ -23,39 +23,15 @@ For `/' and `*' we need additional checks to see if it's a comment or not.")
        (string char)))
    string))
 
-(defun org-typst--reference (datum info &optional named-only)
-  "Return an appropriate reference for DATUM.
+(defun org-typst--reference (datum info)
+  "Return a reference for DATUM.
 
-DATUM is an element or a `target' type object.  INFO is the
-current export state, as a plist.
+If DATUM is either a headline or an inline task, and if it has a :CUSTOM_ID: field in its drawer, then it'll return that id.
 
-When NAMED-ONLY is non-nil and DATUM has no NAME keyword, return
-nil.  This doesn't apply to headlines, inline tasks, radio
-targets and targets.
-
-Taken from ox-html.el, copied into ox-typst.el since it's an ox-html
-internal, just in case it gets deleted"
-  (let* ((type (org-element-type datum))
-         (user-label
-          (org-element-property
-           (pcase type
-             ((or `headline `inlinetask) :CUSTOM_ID)
-             ((or `radio-target `target) :value)
-             (_ :name))
-           datum)))
-    (cond
-     ((and user-label
-           (or (plist-get info :html-prefer-user-labels)
-               ;; Used CUSTOM_ID property unconditionally.
-               (memq type '(headline inlinetask))))
-      user-label)
-     ((and named-only
-           (not (memq type '(headline inlinetask radio-target target)))
-           (not user-label))
-      nil)
-     (t
-      (org-export-get-reference datum info)))))
-
+Else, an automatically-generated reference string is returned. In this case, see `org-export-get-reference'."
+  (or (and (memq (org-element-type datum) '(headline inlinetask))
+           (org-element-property :CUSTOM_ID datum))
+      (org-export-get-reference datum info)))
 
 ;;;; BACKEND FUNCTIONS
 (defun org-typst-radio-target (radio-target contents info)
@@ -114,7 +90,7 @@ internal, just in case it gets deleted"
 (defun org-typst-bold (bold contents info)
   (format "#strong[%s];" contents))
 
-(defun org-typst-code (code contents info)
+(defun org-typst-code/verbatim (code contents info)
   (format "#raw(\"%s\");"
           (->> code
                (org-element-property :value)
@@ -218,9 +194,61 @@ internal, just in case it gets deleted"
            (org-element-property :drawer-name drawer)
            contents))
 
+(defun org-typst-strikethrough (_ contents _)
+  (format "#strike[%s];" contents))
+
+(defun org-typst-subscript (_ contents _)
+  (format "#sub[%s];" contents))
+
+(defun org-typst-superscript (_ contents _)
+  (format "#super[%s];" contents))
+
+(defun org-typst-keyword (keyword _ info)
+  (let ((key (org-element-property :key keyword))
+        (value (org-element-property :value keyword)))
+    (cond
+     ;; TODO: figure out how else to use this
+     ((string= "TYPST" key) value))))
+
+(defun org-typst-underline (_ contents _)
+  (format "#underline[%s];" contents))
+
+(defun org-typst-fixed-width (fixed-width _ _)
+  (format "#raw(\"%s\", block: true);"
+          (org-remove-indentation
+           (org-typst--escape-raw-string
+            (org-element-property :value fixed-width)))))
+
+(defun org-typst-target (target _ _)
+  (format "#label(\"%s\");"
+          (org-typst--escape-raw-string
+           (org-element-property :value target))))
+
+(defun org-typst-horizontal-rule (_ _ _)
+  ;; TODO: allow users to customize how to render horizontal rules.
+  (format "#line(length: 100%);"))
+
+(defun org-typst-property-drawer (_ contents _)
+  ;; Feels weird. Find out if property drawers' contents go through
+  ;; plain text filters or not. If they are returned raw, then this is ok.
+  (format "#raw(\"%s\", block: true)"
+          (org-typst--escape-raw-string contents)))
+
+(defun org-typst-quote-block (quote-block contents _)
+  ;; TODO: finish
+  ;; DONE: Figure out how to use ATTR_TYPST: :author Some Author
+  (let ((author (plist-get (org-export-read-attribute :attr_typst quote-block) :author)))
+    (concat "#quote(block: true"
+            (and author (format ", attribution: [%s]"
+                                (org-typst--escape-content-string author)))
+            ")[" contents "];")))
+
+(defun org-typst-dynamic-block (_ contents _)
+  contents)
+
 (defcustom org-typst-langs
   '((emacs-lisp . "elisp"))
-  "Mapping from emacs language names to typst language names.
+  "Alist mapping from emacs language names to typst language names.
 
 When org mode encounters code blocks, it extracts their languages according to its own rules and conventions. This might result in, for example, the language of an ELisp block being extracted as `emacs-lisp'. At the same time, ELisp is called `elisp' in typst. Thus, we need to tell org typst export how to translate between the org mode names of languages and typst names of languages."
   :type '(list (alist :key-type symbol :value-type string)))
@@ -237,7 +265,7 @@ When org mode encounters code blocks, it extracts their languages according to i
     (section . org-typst-section)
     (paragraph . org-typst-paragraph)
     (bold . org-typst-bold)
-    (code . org-typst-code)
+    (code . org-typst-code/verbatim)
     (entity . org-typst-entity)
     (export-snippet . org-typst-export-snippet)
     (footnote-reference . org-typst-footnote-reference)
@@ -253,38 +281,40 @@ When org mode encounters code blocks, it extracts their languages according to i
     (center-block . org-typst-center-block)
     (clock . org-typst-clock)
     (drawer . org-typst-drawer)
+    (strike-through . org-typst-strike-through)
+    (subscript . org-typst-subscript)
+    (superscript . org-typst-superscript)
+    (keyword . org-typst-keyword)
+    (underline . org-typst-underline)
+    (fixed-width . org-typst-fixed-width)
+    (target . org-typst-target)
+    (horizontal-rule . org-typst-horizontal-rule)
+    (property-drawer . org-typst-property-drawer)
+    (quote-block . org-typst-quote-block)
+    (verbatim . org-typst-code/verbatim)
+    (dynamic-block . org-typst-dynamic-block)
 
-    ;; (strike-through . org-latex-strike-through)
-    ;; (subscript . org-latex-subscript)
-    ;; (superscript . org-latex-superscript)
-    ;; (keyword . org-latex-keyword)
-    ;; (underline . org-latex-underline)
-    ;; (footnote-definition . org-latex-footnote-definition)
-    ;; (horizontal-rule . org-latex-horizontal-rule)
-    ;; (fixed-width . org-latex-fixed-width)
-    ;; (property-drawer . org-latex-property-drawer)
-    ;; (quote-block . org-latex-quote-block)
     ;; (table . org-latex-table)
     ;; (table-cell . org-latex-table-cell)
     ;; (table-row . org-latex-table-row)
-    ;; (verbatim . org-latex-verbatim)
-    ;; (verse-block . org-latex-verse-block)
 
-    ;; (dynamic-block . org-latex-dynamic-block)
+    ;; (verse-block . org-latex-verse-block)
     ;; (example-block . org-latex-example-block)
     ;; (export-block . org-latex-export-block)
     ;; (inlinetask . org-latex-inlinetask)
-    ;; (latex-environment . org-latex-latex-environment)
-    ;; (latex-fragment . org-latex-latex-fragment)
     ;; (node-property . org-latex-node-property)
     ;; (planning . org-latex-planning)
     ;; (special-block . org-latex-special-block)
     ;; (statistics-cookie . org-latex-statistics-cookie)
-    ;; (target . org-latex-target)
     ;; (timestamp . org-latex-timestamp)
+    ;; (latex-environment . org-latex-latex-environment)
+    ;; (latex-fragment . org-latex-latex-fragment)
     ;; ;; Pseudo objects and elements.
     ;; (latex-math-block . org-latex-math-block)
     ;; (latex-matrices . org-latex-matrices)
+
+    ;; wontdo
+    ;; (footnote-definition . org-latex-footnote-definition)
     )
   :options-alist
   '((:typst-langs nil nil org-typst-langs)
@@ -312,38 +342,38 @@ When org mode encounters code blocks, it extracts their languages according to i
   '(babel-call center-block clock comment comment-block diary-sexp drawer dynamic-block example-block export-block fixed-width footnote-definition headline horizontal-rule inlinetask item keyword latex-environment node-property paragraph plain-list planning property-drawer quote-block section special-block src-block table table-row verse-block))
 
 (let* ((minimal-set '(bold code entity italic latex-fragment strike-through
-			     subscript superscript underline verbatim))
-	 (standard-set
-	  (remq 'citation-reference (remq 'table-cell org-element-all-objects)))
-	 (standard-set-no-line-break (remq 'line-break standard-set)))
-    `((bold ,@standard-set)
-      (citation citation-reference)
-      (citation-reference ,@minimal-set)
-      (footnote-reference ,@standard-set)
-      (headline ,@standard-set-no-line-break)
-      (inlinetask ,@standard-set-no-line-break)
-      (italic ,@standard-set)
-      (item ,@standard-set-no-line-break)
-      (keyword ,@(remq 'footnote-reference standard-set))
-      ;; Ignore all links in a link description. Also ignore
-      ;; radio-targets and line breaks.
-      (link export-snippet inline-babel-call inline-src-block macro
-	    statistics-cookie ,@minimal-set)
-      (paragraph ,@standard-set)
-      ;; Remove any variable object from radio target as it would
-      ;; prevent it from being properly recognized.
-      (radio-target ,@minimal-set)
-      (strike-through ,@standard-set)
-      (subscript ,@standard-set)
-      (superscript ,@standard-set)
-      ;; Ignore inline babel call and inline source block as formulas
-      ;; are possible. Also ignore line breaks and statistics
-      ;; cookies.
-      (table-cell citation export-snippet footnote-reference link macro
-                  radio-target target timestamp ,@minimal-set)
-      (table-row table-cell)
-      (underline ,@standard-set)
-      (verse-block ,@standard-set)))
+                           subscript superscript underline verbatim))
+       (standard-set
+        (remq 'citation-reference (remq 'table-cell org-element-all-objects)))
+       (standard-set-no-line-break (remq 'line-break standard-set)))
+  `((bold ,@standard-set)
+    (citation citation-reference)
+    (citation-reference ,@minimal-set)
+    (footnote-reference ,@standard-set)
+    (headline ,@standard-set-no-line-break)
+    (inlinetask ,@standard-set-no-line-break)
+    (italic ,@standard-set)
+    (item ,@standard-set-no-line-break)
+    (keyword ,@(remq 'footnote-reference standard-set))
+    ;; Ignore all links in a link description. Also ignore
+    ;; radio-targets and line breaks.
+    (link export-snippet inline-babel-call inline-src-block macro
+	  statistics-cookie ,@minimal-set)
+    (paragraph ,@standard-set)
+    ;; Remove any variable object from radio target as it would
+    ;; prevent it from being properly recognized.
+    (radio-target ,@minimal-set)
+    (strike-through ,@standard-set)
+    (subscript ,@standard-set)
+    (superscript ,@standard-set)
+    ;; Ignore inline babel call and inline source block as formulas
+    ;; are possible. Also ignore line breaks and statistics
+    ;; cookies.
+    (table-cell citation export-snippet footnote-reference link macro
+                radio-target target timestamp ,@minimal-set)
+    (table-row table-cell)
+    (underline ,@standard-set)
+    (verse-block ,@standard-set)))
 
 (defvar objects-unused-in-ox-html
   '(citation citation-reference inline-babel-call macro))
