@@ -1,6 +1,10 @@
+;;; ox-typst.el -*- lexical-binding: t; -*-
+
+(require 'cl-lib)
+
 ;;;; UTIL VARS
 (defconst org-typst--special-characters
-  "();[]#*`_<>@$\\/"
+  "();[]#*`_<>@$\\/_"
   "User-written characters in the org mode document that need to be escaped to not interfere with typst syntax.
 
 For `/' and `*' we need additional checks to see if it's a comment or not.")
@@ -33,13 +37,33 @@ Else, an automatically-generated reference string is returned. In this case, see
            (org-element-property :CUSTOM_ID datum))
       (org-export-get-reference datum info)))
 
+(cl-defun org-typst--raw (unescaped-string info &key block org-lang
+                                           align syntaxes theme tab-size)
+  ""
+  (unless (org-string-nw-p unescaped-string)
+    (cl-return))
+  (concat "#raw("
+          (format "\"%s\"" (org-typst--escape-raw-string unescaped-string))
+          (when block ", block: true")
+          (when org-lang
+            (format ", lang: \"%s\""
+                    (-> (alist-get org-lang (plist-get info :typst-langs) nil nil #'string=)
+                        (or (downcase org-lang))
+                        (org-typst--escape-raw-string))))
+          (when (and (listp syntaxes) (not (seq-empty-p syntaxes)))
+            (->> (mapconcat #'org-typst--escape-raw-string syntaxes "\", \"")
+                 (format ", syntaxes: (\"%s\")")))
+          (when theme (format ", theme: \"%s\"" (org-typst--escape-raw-string theme)))
+          (when tab-size (format ", tab-size: %d"))
+          ");"))
+
 ;;;; BACKEND FUNCTIONS
 (defun org-typst-radio-target (radio-target contents info)
   (format "#label(\"%s\");%s" (org-typst--reference radio-target info) contents))
 
 (defun org-typst-link (link contents info)
   ;; https://typst.app//docs/reference/model/link
-  ;; > To link to web pages, dest should be a valid URL string. If the URL is in the mailto: or tel: scheme and the body parameter is omitted, the email address or phone number will be the link's body, without the scheme.
+  ;; > To link to web pages, `dest' should be a valid URL string. If the URL is in the mailto: or tel: scheme and the body parameter is omitted, the email address or phone number will be the link's body, without the scheme.
   ;; For ex. `#link("mailto:thisperson@gmail.com")' will produce `thisperson@gmail.com' (clickable link)
   ;; Therefore mailto: links can map 1:1 with org mode mailto: links' behavior/look
   (let ((contents (org-string-nw-p contents))
@@ -67,10 +91,15 @@ Else, an automatically-generated reference string is returned. In this case, see
                  ref
                  (or contents
                      (org-element-property :path link)))))
+      ('coderef
+       ;; TODO: Figure out code references.
+       ;; Tried (org-export-resolve-coderef ... ...) and it just returns the reference.
+       ;; Thanks for nothing.
+       contents)
       (_
        ;; TODO: support other link types
        (warn "Unsupported link type `%s'" type)
-       nil))))
+       contents))))
 
 (defun org-typst-template (ready-file-contents export-options)
   ;; TODO: Source template configs from `export-options'
@@ -90,11 +119,8 @@ Else, an automatically-generated reference string is returned. In this case, see
 (defun org-typst-bold (bold contents info)
   (format "#strong[%s];" contents))
 
-(defun org-typst-code/verbatim (code contents info)
-  (format "#raw(\"%s\");"
-          (->> code
-               (org-element-property :value)
-               org-typst--escape-raw-string)))
+(defun org-typst-code/verbatim (code/verbatim contents info)
+  (org-typst--raw (org-element-property :value code/verbatim) info))
 
 (defun org-typst-entity (entity contents info)
   (org-element-property :utf-8 entity))
@@ -120,12 +146,8 @@ Else, an automatically-generated reference string is returned. In this case, see
       (format "#footnote(label(\"%s\"))" definition-ref)))))
 
 (defun org-typst-inline-src-block (inline-src-block contents info)
-  (format "#raw(\"%s\", block: false, lang: \"%s\");"
-          (org-typst--escape-raw-string
-           (org-element-property :value inline-src-block))
-          (let ((org-lang (org-element-property :language inline-src-block)))
-            (or (alist-get (intern org-lang) (plist-get info :typst-langs))
-                (downcase org-lang)))))
+  (org-typst--raw (org-element-property :value inline-src-block) info
+                  :org-lang (org-element-property :language inline-src-block)))
 
 (defun org-typst-italic (italic contents info)
   (format "#emph[%s];" contents))
@@ -144,17 +166,61 @@ Else, an automatically-generated reference string is returned. In this case, see
             (org-export-get-reference headline info)
             (or contents ""))))
 
-(defun org-typst-src-block (src-block contents info)
-  ;; contents is always nil, ignorable
-  (let ((lang (org-element-property :language src-block))
-        (code (org-typst--escape-raw-string (org-element-property :value src-block))))
-    (format "#raw(\"%s\", lang: \"%s\", block: true);" code lang)))
+(defmacro org-typst--with-props (element properties &rest body)
+  "Destructures org element properties into corresponding variables.
 
-(defun org-typst--list-func-name (type)
-  (pcase type
-    ('unordered "list")
-    ('ordered "enum")
-    ('descriptive "terms")))
+`PROPERTIES' must be a list one of the following structures:
+1. A symbol. For example:
+   (org-typst--with-props elem (some-property)
+      body...)
+   ;; => expands to
+   (let ((some-property (org-element-property :some-property elem)))
+      body...)
+2. A list with a symbol as its first element and a keyword as its second element.
+   Example:
+   (org-typst--with-props elem ((some-var :some-property))
+      body...)
+   ;; => expands to
+   (let ((some-var (org-element-property :some-property elem)))
+      body...)"
+  (let ((sym (gensym)))
+    `(let* ((,sym ,element)
+            ,@(mapcar
+               (lambda (prop-spec)
+                 (cond
+                  ((and (symbolp prop-spec) (not (keywordp prop-spec)))
+                   `(,prop-spec
+                     (org-element-property
+                      ,(intern (concat ":" (symbol-name prop-spec)))
+                      ,sym)))
+                  ((and (listp prop-spec)
+                        (symbolp (first prop-spec))
+                        (keywordp (second prop-spec)))
+                   `(,(first prop-spec)
+                     (org-element-property ,(second prop-spec) ,sym)))
+                  (t (error "Wrong usage of `org-typst--with-props'. See documentation."))))
+               properties))
+       ,@body)))
+(put 'org-typst--with-props 'lisp-indent-function 2)
+
+(defun org-typst-src-block (src-block _contents info)
+  ;; contents is always nil, ignorable
+  ;; (destructuring-bind (code . refs-alist) (org-export-unravel-code src-block)
+  ;;   (org-typst--with-props src-block
+  ;;       ((lang :language)
+  ;;        retain-labels
+  ;;        use-labels
+  ;;        number-lines)
+  ;;     (org-export-format-code
+  ;;      code
+  ;;      (lambda (line line-num ref)
+  ;;        )
+  ;;      number-lines
+  ;;      refs-alist)))
+  (cl-destructuring-bind (code . refs) (org-export-unravel-code src-block)
+    (org-typst--raw code info
+                    :org-lang (org-element-property :language src-block)
+                    :block t)))
 
 (defun org-typst-plain-list (plain-list contents info)
   ;; DONE implement
@@ -246,12 +312,24 @@ Else, an automatically-generated reference string is returned. In this case, see
 (defun org-typst-dynamic-block (_ contents _)
   contents)
 
+(defun org-typst-table (table contents info)
+  ;; Only `org' tables have contents.  `table.el' tables
+  ;; use a `:value' property to store raw table as
+  ;; a string.
+  (if (eq (org-element-property :type table) 'table.el)
+      ;; TODO: figure out table.el and handle it properly
+      (org-typst--raw (org-element-property :value table) info :block t)
+    ;; Main table handler. It only decorates, surrounds, etc.
+    ;; The bulk of the work seems to be done in row and cell handlers.
+    (let ((columns )))
+    contents))
+
 (defcustom org-typst-langs
-  '((emacs-lisp . "elisp"))
+  '(("emacs-lisp" . "elisp"))
   "Alist mapping from emacs language names to typst language names.
 
 When org mode encounters code blocks, it extracts their languages according to its own rules and conventions. This might result in, for example, the language of an ELisp block being extracted as `emacs-lisp'. At the same time, ELisp is called `elisp' in typst. Thus, we need to tell org typst export how to translate between the org mode names of languages and typst names of languages."
-  :type '(list (alist :key-type symbol :value-type string)))
+  :type '(list (alist :key-type string :value-type string)))
 
 (defcustom org-typst-drawer-formatter
   (lambda (name contents) contents)

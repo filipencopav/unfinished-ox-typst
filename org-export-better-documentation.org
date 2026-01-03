@@ -8,6 +8,13 @@ In <<<one>>> line, one would write a hello world program in rust like this: src_
 
 Contains footnote[fn:1].
 
+#+begin_src emacs-lisp
+  (defun sample ()             (ref:function-arguments)
+    (format "Hello, world!"))
+#+end_src
+
+Testing my ability to [[(function-arguments)][reference the place in code.]]
+
 Testing /*bold italics*/.
 
 Footnote reference[fn:1].
@@ -33,7 +40,7 @@ centered text!
 
 #+ATTR_TYPST: :author Karl Marx
 #+begin_quote
-Ideas, which conquer our intelligence, which overcome the outlook that reason has riveted to our conscience, are chains from which we cannot tear ourselves away without tearing our hearts; they are demons that man can overcome only by submitting to them.
+Ideas, which conquer our *intelligence*, which overcome the outlook that reason has riveted to our conscience, are chains from which we cannot tear ourselves away without tearing our hearts; they are demons that man can overcome only by submitting to them.
 #+end_quote
 
 * TODO Term specification and explanation
@@ -51,7 +58,7 @@ Here are the properties that each element has:
 + ~:begin~, ~:end~: integer markers of beginning and end of element
 + ~:post-blank~: integer, how many whitespace characters follow this element
 
-All elements/objects whose handler function receives a non-nil ~contents~ argument also have 2 arguments, marking the index of the start and index of the end of ~contents~:
+All *elements/objects* /whose/ handler function receives a non-nil ~contents~ argument also have 2 arguments, marking the index of the start and index of the end of ~contents~:
 + ~:contents-begin~, ~:contents-end~: integer markers of beginning and end of element's contents.
 
 * DONE Template
